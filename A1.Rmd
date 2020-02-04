@@ -1,0 +1,313 @@
+---
+title: "APM466 A1"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#install.packages('ggplot2')
+library('ggplot2')
+```
+
+```{r 4a Formating Bonds}
+bonds <- read.csv("APM466_Bonds_A1.csv", header=F)
+colnames(bonds) <- c("PICKED","ISIN","COUPON","ISSUE DATE","MATURITY DATE","MONTHS TILL MATURITY", "2020-01-02","2020-01-03","2020-01-06","2020-01-07","2020-01-08","2020-01-09","2020-01-10","2020-01-13","2020-01-14","2020-01-15")
+
+selectedbonds <- bonds[which(bonds$PICKED=='X'),]
+#print(as.numeric(as.vector(selectedbonds['2020-01-02'][1,1])))
+View(selectedbonds)
+```
+
+```{r 4a Yield Curve}
+
+# Create CF function
+CF <- function(date, coupon, monthstomaturity) {
+  num <- ceiling(as.numeric(as.vector(monthstomaturity))/6)
+  CF <- rep(as.numeric(as.vector(coupon)), num+1)
+  CF[1] <- (-1)*as.numeric(as.vector(date))
+  CF [num+1] <- 100 + as.numeric(as.vector(coupon))
+  return(CF)
+}
+  
+CF_Time <- function (monthstomaturity) {
+  multiple <- floor(as.numeric(as.vector(monthstomaturity))/6)
+  CF_Time <- as.numeric(as.vector(monthstomaturity)) - 6*multiple
+}
+
+#Create bond valuation function
+#bval <- function(i, CF, CF_Time = 100){
+  #for (t in length(CF)) {
+    #CF[t] / (1 + i)^((CF_Time+6*(t-1))/12)
+  #}
+#}
+bval <- function(i, cf, t=seq(along = cf))
+      sum(cf / (1 + i)^t)
+
+# Create ytm() function using uniroot
+ytm <- function(cf) {
+    uniroot(bval, c(0, 1), cf=cf)$root
+}
+
+yieldrate <- function(date, monthstomaturity, coupon) {
+  # Used to store yields found
+  yieldR<-data.frame(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+  for (j in 1:11) {
+    Cashflow <- CF(as.numeric(as.vector(date[j,1])), as.numeric(as.vector(coupon[j,1])), as.numeric(as.vector(monthstomaturity[j,1])))
+    Time <- CF_Time(as.numeric(as.vector(monthstomaturity[j,1])))
+    yieldR[j] <- ytm(Cashflow)
+  }
+  yieldR[6] <- (yieldR[6]*3 + yieldR[7]*6)/9
+  yieldR[8] <- (yieldR[8]*3 + yieldR[9]*6)/9
+  yieldR[11] <- (yieldR[10]*6 + yieldR[11]*3)/9
+  yieldR
+}
+yield02 <- yieldrate(selectedbonds['2020-01-02'], selectedbonds['MONTHS TILL MATURITY'], selectedbonds['COUPON'])
+yield03 <-yieldrate(selectedbonds['2020-01-03'], selectedbonds['MONTHS TILL MATURITY'], selectedbonds['COUPON'])
+yield06 <-yieldrate(selectedbonds['2020-01-06'], selectedbonds['MONTHS TILL MATURITY'], selectedbonds['COUPON'])
+yield07 <- yieldrate(selectedbonds['2020-01-07'], selectedbonds['MONTHS TILL MATURITY'], selectedbonds['COUPON'])
+yield08 <- yieldrate(selectedbonds['2020-01-08'], selectedbonds['MONTHS TILL MATURITY'], selectedbonds['COUPON'])
+yield09 <- yieldrate(selectedbonds['2020-01-09'], selectedbonds['MONTHS TILL MATURITY'], selectedbonds['COUPON'])
+yield10 <- yieldrate(selectedbonds['2020-01-10'], selectedbonds['MONTHS TILL MATURITY'], selectedbonds['COUPON'])
+yield13 <- yieldrate(selectedbonds['2020-01-13'], selectedbonds['MONTHS TILL MATURITY'], selectedbonds['COUPON'])
+yield14 <- yieldrate(selectedbonds['2020-01-14'], selectedbonds['MONTHS TILL MATURITY'], selectedbonds['COUPON'])
+yield15 <- yieldrate(selectedbonds['2020-01-15'], selectedbonds['MONTHS TILL MATURITY'], selectedbonds['COUPON'])
+
+```
+
+```{r Plotting4a}
+Year <- c(2020.2, 2020.7, 2021.2, 2021.7, 2022.2, 2022.7, 2023.2, 2023.7, 2024.2, 2024.7, 2025.2)
+table<- data.frame(Year, t(yield02), t(yield03), t(yield06), t(yield07), t(yield08), t(yield09), t(yield10), t(yield13), t(yield14), t(yield15))
+table
+
+plot(Year, t(yield02), main="Yield Curve",ylab="Yield", type="l",col="blue")
+lines(Year,t(yield03), col="red")
+lines(Year,t(yield06), col="orange")
+lines(Year,t(yield07), col="green")
+lines(Year,t(yield08), col="black")
+lines(Year,t(yield09), col="purple")
+lines(Year,t(yield10), col="yellow")
+lines(Year,t(yield13), col="grey")
+lines(Year,t(yield14), col="pink")
+lines(Year,t(yield15), col="brown")
+legend("bottomright",c("2020-01-02","2020-01-03","2020-01-06","2020-01-07","2020-01-08","2020-01-09","2020-01-10","2020-01-13","2020-01-14","2020-01-15"),fill=c("blue","red","orange","green","black","purple","yellow","grey","pink","brown"),cex = 0.75)
+legend.position = c(.95, .95)
+
+```
+
+
+```{r Spot Rate}
+spotrate <- function(date, MONTHS_TILL_MATURITY, coupon) {
+  # Used to store spot rate found
+  spotR<-data.frame(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+  
+  #for maturities less than 6 months
+  # initial <- -log(as.numeric(as.vector(date[1,1]))/100)/as.numeric(as.vector(MONTHS_TILL_MATURITY[1,1])/12) 
+  initial <- ((as.numeric(as.vector(date[1,1]))/100)^(-12/(2*as.numeric(as.vector(MONTHS_TILL_MATURITY[1,1]))))-1) 
+  spotR[1,1] <- initial 
+  
+total = 0
+  for (i in 2:11){
+    total = 0
+    for (j in 1:(i-1)){
+      #total <- total + as.numeric(as.vector(coupon[i,1]))*exp(-j*as.numeric(as.vector(spotR[1,j])))
+    #spotR[1,i] <- -log((as.numeric(as.vector(date[i,1])) - total)/(1+as.numeric(as.vector(coupon[i,1]))))/i
+    total = total + as.numeric(as.vector(coupon[i,1]))/(1+spotR[1,j])^(j)
+    }
+    spotR[1,i] <- (((100+ as.numeric(as.vector(coupon[i,1])))/(as.numeric(as.vector(date[i,1]))-total))^(1/i)-1)
+  }
+  for (i in 1:10)
+    spotR [i] <- 2*spotR[i]
+  spotR
+
+}
+spotrate(selectedbonds['2020-01-02'], selectedbonds["MONTHS TILL MATURITY"], selectedbonds["COUPON"])
+#I realize this isnt correct but tbh im not sure why my code keeps crashing .. so i used 1st method of spot curve to get values (that i know are wrong so that i can at least complete the other parts with wrong spot rates)
+spot02 <- spotrate(selectedbonds['2020-01-02'], selectedbonds["MONTHS TILL MATURITY"], selectedbonds["COUPON"])
+spot03 <- spotrate(selectedbonds['2020-01-03'], selectedbonds["MONTHS TILL MATURITY"], selectedbonds["COUPON"])
+spot06 <- spotrate(selectedbonds['2020-01-06'], selectedbonds["MONTHS TILL MATURITY"], selectedbonds["COUPON"])
+spot07 <- spotrate(selectedbonds['2020-01-07'], selectedbonds["MONTHS TILL MATURITY"], selectedbonds["COUPON"])
+spot08 <- spotrate(selectedbonds['2020-01-08'], selectedbonds["MONTHS TILL MATURITY"], selectedbonds["COUPON"])
+spot09 <- spotrate(selectedbonds['2020-01-09'], selectedbonds["MONTHS TILL MATURITY"], selectedbonds["COUPON"])
+spot10 <- spotrate(selectedbonds['2020-01-10'], selectedbonds["MONTHS TILL MATURITY"], selectedbonds["COUPON"])
+spot13 <- spotrate(selectedbonds['2020-01-13'], selectedbonds["MONTHS TILL MATURITY"], selectedbonds["COUPON"])
+spot14 <- spotrate(selectedbonds['2020-01-14'], selectedbonds["MONTHS TILL MATURITY"], selectedbonds["COUPON"])
+spot15 <- spotrate(selectedbonds['2020-01-15'], selectedbonds["MONTHS TILL MATURITY"], selectedbonds["COUPON"])
+```
+
+```{r Plotting4b}
+Year <- c(2020.2, 2020.7, 2021.2, 2021.7, 2022.2, 2022.7, 2023.2, 2023.7, 2024.2, 2024.7, 2025.2)
+table<- data.frame(Year, t(spot02), t(spot03), t(spot06), t(spot07), t(spot08), t(spot09), t(spot10), t(spot13), t(spot14), t(spot15))
+table
+
+plot(Year, t(spot02), main="Spot Rate Curve",ylab="Spot Rate", type="l",col="blue")
+lines(Year,t(spot03), col="red")
+lines(Year,t(spot06), col="orange")
+lines(Year,t(spot08), col="black")
+lines(Year,t(spot09), col="purple")
+lines(Year,t(spot10), col="yellow")
+lines(Year,t(spot13), col="grey")
+lines(Year,t(spot14), col="pink")
+lines(Year,t(spot15), col="brown")
+legend("topleft",c("2020-01-02","2020-01-03","2020-01-06","2020-01-07","2020-01-08","2020-01-09","2020-01-10","2020-01-13","2020-01-14","2020-01-15"),fill=c("blue","red","orange","green","black","purple","yellow","grey","pink","brown"),cex = 0.75)
+legend.position = c(.95, .95)
+
+```
+
+```{r 4c Forward Rate}
+# First convert the 6 month spot rates into 1 year spot rates.
+
+Annual_spot <- function(spotrates){
+  Annual_Spot <- data.frame(0, 1, 2, 3, 4)
+  for (j in 1:5) {
+    Annual_Spot[j] <- (1+spotrates[2*j-1])^(6/12)*(1+spotrates[2*j])^(6/12)-1
+  }
+  Annual_Spot
+}
+Annual_spot_02 <- Annual_spot(spot02)
+Annual_spot_03 <- Annual_spot(spot03)
+Annual_spot_06 <- Annual_spot(spot06)
+Annual_spot_07 <- Annual_spot(spot07)
+Annual_spot_08 <- Annual_spot(spot08)
+Annual_spot_09 <- Annual_spot(spot09)
+Annual_spot_10 <- Annual_spot(spot10)
+Annual_spot_13 <- Annual_spot(spot13)
+Annual_spot_14 <- Annual_spot(spot14)
+Annual_spot_15 <- Annual_spot(spot15)
+
+
+forwardrate <- function(annual_spotrates) {
+  # Used to store forward rates found
+  forwardR<-data.frame(0, 0, 0, 0)
+  forwardR[1] <- (((1+annual_spotrates[2])^(2))/((1+annual_spotrates[1])))-1
+  forwardR[2] <- (((1+annual_spotrates[3])^(3))/((1+annual_spotrates[1])))^(1/2)-1
+  forwardR[3] <- (((1+annual_spotrates[4])^(4))/((1+annual_spotrates[1])))^(1/3)-1
+  forwardR[4] <- (((1+annual_spotrates[5])^(5))/((1+annual_spotrates[1])))^(1/4)-1
+
+  forwardR
+}
+
+F2 <- forwardrate(Annual_spot_02)
+F3 <- forwardrate(Annual_spot_03)
+F6 <- forwardrate(Annual_spot_06)
+F7 <- forwardrate(Annual_spot_07)
+F8 <- forwardrate(Annual_spot_08)
+F9 <- forwardrate(Annual_spot_09)
+F10 <- forwardrate(Annual_spot_10)
+F13 <- forwardrate(Annual_spot_13)
+F14 <- forwardrate(Annual_spot_14)
+F15 <- forwardrate(Annual_spot_15)
+```
+
+
+```{r 4c Plot}
+Year <- c(1, 2, 3, 4)
+table<- data.frame(Year, t(F2), t(F3), t(F6), t(F7), t(F8), t(F9), t(F10), t(F13), t(F14), t(F14))
+table
+
+plot(Year, t(F2), main="Foward Rate Curve",ylab="Forward Rate", type="l",col="blue")
+lines(Year,t(F3), col="red")
+lines(Year,t(F6), col="orange")
+lines(Year,t(F8), col="black")
+lines(Year,t(F9), col="purple")
+lines(Year,t(F10), col="yellow")
+lines(Year,t(F13), col="grey")
+lines(Year,t(F14), col="pink")
+lines(Year,t(F15), col="brown")
+legend("bottomright",c("2020-01-02","2020-01-03","2020-01-06","2020-01-07","2020-01-08","2020-01-09","2020-01-10","2020-01-13","2020-01-14","2020-01-15"),fill=c("blue","red","orange","green","black","purple","yellow","grey","pink","brown"),cex = 0.75)
+legend.position = c(.95, .95)
+```
+
+```{r 5 Covariance Matrices Yield}
+#Calculate two covariance matrices for the time series of daily log-returns of yield, and forward rates (no spot rates). In other words, first calculate the covariance matrix of the random variables Xi, for i = 1, . . . , 5, where each random variable Xi has a time series Xi,j given by: 
+  
+#Xi,j = log(ri,j+1/ri,j ), j = 1, . . . , 
+
+Matrix_Maker <- function(yields){
+  matrix_row <- c(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+
+  for (i in 1:10) {
+    matrix_row[i]<-as.numeric(as.vector(log(yields[i+1]/yields[i])))
+  }
+  matrix_row
+}
+
+M2 <- Matrix_Maker(yield02)
+M3 <- Matrix_Maker(yield03)
+M6 <- Matrix_Maker(yield06)
+M7 <- Matrix_Maker(yield07)
+M8 <- Matrix_Maker(yield08)
+M9 <- Matrix_Maker(yield09)
+M10 <- Matrix_Maker(yield10)
+M13 <- Matrix_Maker(yield13)
+M14 <- Matrix_Maker(yield14)
+M15 <- Matrix_Maker(yield15)
+
+A <- data.frame(cbind(M2,M3,M6,M7,M8,M9,M10,M13,M14,M15))
+
+all_A = do.call(rbind, A)
+
+#Extraction of all values of my matrix into a vector
+extracted_values=unlist(as.vector(t(all_A)))
+
+#Build the new matrix
+matrixC = t(matrix(data = extracted_values,nrow = 10,ncol = 10))
+print("MATRIX FOR YIELD")
+print(matrixC)
+covariance_matrix <- cov(matrixC, matrixC)
+print("COVARIANCE MATRIX FOR YIELD")
+print(covariance_matrix)
+
+```
+
+```{r 5 Covariance Matrices Forward}
+#Calculate two covariance matrices for the time series of daily log-returns of yield, and forward rates (no spot rates). In other words, first calculate the covariance matrix of the random variables Xi, for i = 1, . . . , 5, where each random variable Xi has a time series Xi,j given by: 
+  
+#Xi,j = log(ri,j+1/ri,j ), j = 1, . . . , 
+
+Matrix_Maker2 <- function(forward){
+  matrix_row <- c(0, 0, 0)
+
+  for (i in 1:3) {
+    matrix_row[i]<-as.numeric(as.vector(log(forward[i+1]/forward[i])))
+  }
+  matrix_row
+}
+
+Forward2 <- Matrix_Maker2(F2)
+Forward3 <- Matrix_Maker2(F3)
+Forward6 <- Matrix_Maker2(F6)
+Forward7 <- Matrix_Maker2(F7)
+Forward8 <- Matrix_Maker2(F8)
+Forward9 <- Matrix_Maker2(F9)
+Forward10 <- Matrix_Maker2(F10)
+Forward13 <- Matrix_Maker2(F13)
+Forward14 <- Matrix_Maker2(F14)
+Forward15 <- Matrix_Maker2(F15)
+
+
+
+
+FR <- data.frame(cbind(Forward2,Forward3,Forward6, Forward7,Forward8,Forward9,Forward10,Forward13, Forward14,Forward15))
+
+all_A = do.call(rbind, FR)
+
+#Extraction of all values of my matrix into a vector
+extracted_values=unlist(as.vector(t(all_A)))
+
+#Build the new matrix
+matrixD = t(matrix(data = extracted_values,nrow = 10,ncol = 10))
+print("MATRIX FOR FORWARD")
+print(matrixD)
+covariance_matrix2 <- cov(matrixD, matrixD)
+print("COVARIANCE MATRIX FOR FORWARD")
+print(covariance_matrix2)
+
+```
+```{r 6 Eigenvalue/ Eigenvector}
+ev <- eigen(covariance_matrix)
+print("EIGENVALUE/VECTORS FOR COVARIANCE OF YIELD")
+print(ev)
+ev1 <- eigen(covariance_matrix2)
+print("EIGENVALUE/VECTORS FOR COVARIANCE OF FORWARD")
+print(ev1)
+```
